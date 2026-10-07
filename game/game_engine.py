@@ -2,15 +2,22 @@ import random
 import pygame
 from game.text_box import TextBox
 
+MIN_NUMBER = 1
+MAX_NUMBER = 100
+
 class GameEngine:
     def __init__(self, width, height):
         self.width = width
         self.height = height
-        self.secret_number = random.randint(1, 100)
+        self.secret_number = random.randint(MIN_NUMBER, MAX_NUMBER)
         self.attempts = 0
         self.feedback_msg = "Enter a number between 1 and 100"
         self.feedback_color = (220, 220, 220)
         self.game_won = False
+
+        # Task 2: track the narrowing search range
+        self.range_low = MIN_NUMBER
+        self.range_high = MAX_NUMBER
 
         self.input_box = TextBox(width // 2 - 110, 150, 120, 48)
         self.submit_btn = pygame.Rect(width // 2 + 25, 150, 100, 48)
@@ -42,7 +49,7 @@ class GameEngine:
             return
 
         # Reject numbers outside 1-100 without using an attempt
-        if guess < 1 or guess > 100:
+        if guess < MIN_NUMBER or guess > MAX_NUMBER:
             self.show_warning("Out of range! Pick a number from 1 to 100.")
             self.input_box.clear()
             return
@@ -53,20 +60,28 @@ class GameEngine:
         if guess < self.secret_number:
             self.feedback_msg = f"TOO LOW! (Guess was {guess})"
             self.feedback_color = (80, 160, 240)
+            # Task 2: secret is above this guess, raise the lower bound
+            self.range_low = max(self.range_low, guess + 1)
         elif guess > self.secret_number:
             self.feedback_msg = f"TOO HIGH! (Guess was {guess})"
             self.feedback_color = (240, 100, 80)
+            # Task 2: secret is below this guess, lower the upper bound
+            self.range_high = min(self.range_high, guess - 1)
         else:
             self.feedback_msg = f"CORRECT! Found in {self.attempts} attempts."
             self.feedback_color = (80, 220, 90)
             self.game_won = True
+            self.range_low = guess
+            self.range_high = guess
 
     def reset(self):
-        self.secret_number = random.randint(1, 100)
+        self.secret_number = random.randint(MIN_NUMBER, MAX_NUMBER)
         self.attempts = 0
         self.feedback_msg = "Enter a number between 1 and 100"
         self.feedback_color = (220, 220, 220)
         self.game_won = False
+        self.range_low = MIN_NUMBER
+        self.range_high = MAX_NUMBER
         self.input_box.clear()
 
     def handle_event(self, event):
@@ -106,6 +121,14 @@ class GameEngine:
         feedback_surf = self.font_medium.render(self.feedback_msg, True, self.feedback_color)
         screen.blit(feedback_surf, (self.width // 2 - feedback_surf.get_width() // 2, 235))
 
+        # Task 2: show the current valid search range
+        if self.game_won:
+            range_text = f"The number was {self.secret_number}"
+        else:
+            range_text = f"Search range: {self.range_low} to {self.range_high}"
+        range_surf = self.font_medium.render(range_text, True, (120, 220, 230))
+        screen.blit(range_surf, (self.width // 2 - range_surf.get_width() // 2, 275))
+
         if self.game_won:
             restart_surf = self.font_medium.render("Press [R] to Start a New Game", True, (255, 220, 80))
-            screen.blit(restart_surf, (self.width // 2 - restart_surf.get_width() // 2, 295))
+            screen.blit(restart_surf, (self.width // 2 - restart_surf.get_width() // 2, 320))
