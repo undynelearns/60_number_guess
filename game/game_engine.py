@@ -19,12 +19,34 @@ class GameEngine:
         self.font_medium = pygame.font.SysFont(None, 28)
         self.font_btn = pygame.font.SysFont(None, 26)
 
+    def show_warning(self, message):
+        self.feedback_msg = message
+        self.feedback_color = (240, 200, 80)
+
     def submit_guess(self):
         if self.game_won:
             return
-            
-        guess = int(self.input_box.text)
-        
+
+        text = self.input_box.text.strip()
+
+        # Task 1 fix: empty input no longer crashes and does not use an attempt
+        if not text:
+            self.show_warning("Please type a number before submitting!")
+            return
+
+        try:
+            guess = int(text)
+        except ValueError:
+            self.show_warning("Invalid input! Digits only.")
+            self.input_box.clear()
+            return
+
+        # Reject numbers outside 1-100 without using an attempt
+        if guess < 1 or guess > 100:
+            self.show_warning("Out of range! Pick a number from 1 to 100.")
+            self.input_box.clear()
+            return
+
         self.attempts += 1
         self.input_box.clear()
 
