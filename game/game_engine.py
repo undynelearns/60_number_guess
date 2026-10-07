@@ -6,6 +6,7 @@ MIN_NUMBER = 1
 MAX_NUMBER = 100
 PLAY_WIDTH = 620   # left area for the game, right area for the history panel
 MAX_HISTORY = 6    # Task 3: how many recent guesses to show
+MAX_ATTEMPTS = 7   # Task 4: guesses allowed per game
 
 class GameEngine:
     def __init__(self, width, height):
@@ -19,6 +20,7 @@ class GameEngine:
         self.feedback_msg = "Enter a number between 1 and 100"
         self.feedback_color = (220, 220, 220)
         self.game_won = False
+        self.game_over = False  # Task 4: True when attempts run out
 
         # Task 2: track the narrowing search range
         self.range_low = MIN_NUMBER
@@ -30,6 +32,7 @@ class GameEngine:
         self.input_box = TextBox(cx - 110, 150, 120, 48)
         self.submit_btn = pygame.Rect(cx + 25, 150, 100, 48)
 
+        self.font_huge = pygame.font.SysFont(None, 72)
         self.font_title = pygame.font.SysFont(None, 42)
         self.font_medium = pygame.font.SysFont(None, 28)
         self.font_btn = pygame.font.SysFont(None, 26)
@@ -45,7 +48,8 @@ class GameEngine:
             self.history.pop(0)
 
     def submit_guess(self):
-        if self.game_won:
+        # Task 4: no more guesses once the round has ended
+        if self.game_won or self.game_over:
             return
 
         text = self.input_box.text.strip()
@@ -88,6 +92,12 @@ class GameEngine:
             self.range_low = guess
             self.range_high = guess
             self.add_to_history(guess, "correct")
+            return
+
+        # Task 4: wrong guess with no attempts left means game over
+        if self.attempts >= MAX_ATTEMPTS:
+            self.game_over = True
+            self.input_box.active = False
 
     def reset(self):
         self.secret_number = random.randint(MIN_NUMBER, MAX_NUMBER)
@@ -95,18 +105,22 @@ class GameEngine:
         self.feedback_msg = "Enter a number between 1 and 100"
         self.feedback_color = (220, 220, 220)
         self.game_won = False
+        self.game_over = False
         self.range_low = MIN_NUMBER
         self.range_high = MAX_NUMBER
         self.history = []
         self.input_box.clear()
+        self.input_box.active = True
 
     def handle_event(self, event):
-        self.input_box.handle_event(event)
+        # Task 4: ignore typing in the box once the round is over
+        if not self.game_over:
+            self.input_box.handle_event(event)
 
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_RETURN:
                 self.submit_guess()
-            elif event.key == pygame.K_r and self.game_won:
+            elif event.key == pygame.K_r and (self.game_won or self.game_over):
                 self.reset()
 
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -165,13 +179,36 @@ class GameEngine:
 
             y += 40
 
+    # Task 4: Game Over overlay that reveals the secret number
+    def draw_game_over(self, screen):
+        overlay = pygame.Surface((self.play_width, self.height), pygame.SRCALPHA)
+        overlay.fill((10, 10, 15, 215))
+        screen.blit(overlay, (0, 0))
+
+        over_surf = self.font_huge.render("GAME OVER", True, (240, 80, 70))
+        self.draw_centered(screen, over_surf, 85)
+
+        info_surf = self.font_medium.render(f"You used all {MAX_ATTEMPTS} attempts.", True, (220, 220, 220))
+        self.draw_centered(screen, info_surf, 160)
+
+        reveal_surf = self.font_title.render(f"The number was {self.secret_number}", True, (255, 220, 80))
+        self.draw_centered(screen, reveal_surf, 205)
+
+        restart_surf = self.font_medium.render("Press [R] to Try Again", True, (120, 220, 230))
+        self.draw_centered(screen, restart_surf, 275)
+
     def render(self, screen):
         screen.fill((30, 34, 42))
 
         title_surf = self.font_title.render("Number Guessing Arena", True, (245, 245, 245))
         self.draw_centered(screen, title_surf, 35)
 
-        attempts_surf = self.font_medium.render(f"Attempts: {self.attempts}", True, (180, 185, 195))
+        # Task 4: show attempts used out of the limit, red when running low
+        left = MAX_ATTEMPTS - self.attempts
+        attempts_color = (240, 100, 80) if left <= 2 and not self.game_won else (180, 185, 195)
+        attempts_surf = self.font_medium.render(
+            f"Attempts: {self.attempts} / {MAX_ATTEMPTS}  ({left} left)", True, attempts_color
+        )
         self.draw_centered(screen, attempts_surf, 95)
         self.input_box.render(screen)
 
@@ -199,3 +236,6 @@ class GameEngine:
             self.draw_centered(screen, restart_surf, 320)
 
         self.draw_history_panel(screen)
+
+        if self.game_over:
+            self.draw_game_over(screen)
