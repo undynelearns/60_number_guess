@@ -1,7 +1,8 @@
 import pygame
 from game.game_engine import GameEngine
 
-WIDTH, HEIGHT = 620, 380
+# Task 3: window widened to fit the guess history panel on the right
+WIDTH, HEIGHT = 840, 380
 FPS = 60
 
 def main():

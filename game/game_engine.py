@@ -4,11 +4,16 @@ from game.text_box import TextBox
 
 MIN_NUMBER = 1
 MAX_NUMBER = 100
+PLAY_WIDTH = 620   # left area for the game, right area for the history panel
+MAX_HISTORY = 6    # Task 3: how many recent guesses to show
 
 class GameEngine:
     def __init__(self, width, height):
         self.width = width
         self.height = height
+        self.play_width = PLAY_WIDTH
+        cx = self.play_width // 2
+
         self.secret_number = random.randint(MIN_NUMBER, MAX_NUMBER)
         self.attempts = 0
         self.feedback_msg = "Enter a number between 1 and 100"
@@ -19,16 +24,25 @@ class GameEngine:
         self.range_low = MIN_NUMBER
         self.range_high = MAX_NUMBER
 
-        self.input_box = TextBox(width // 2 - 110, 150, 120, 48)
-        self.submit_btn = pygame.Rect(width // 2 + 25, 150, 100, 48)
+        # Task 3: list of (attempt_number, guess, result)
+        self.history = []
+
+        self.input_box = TextBox(cx - 110, 150, 120, 48)
+        self.submit_btn = pygame.Rect(cx + 25, 150, 100, 48)
 
         self.font_title = pygame.font.SysFont(None, 42)
         self.font_medium = pygame.font.SysFont(None, 28)
         self.font_btn = pygame.font.SysFont(None, 26)
+        self.font_small = pygame.font.SysFont(None, 20)
 
     def show_warning(self, message):
         self.feedback_msg = message
         self.feedback_color = (240, 200, 80)
+
+    def add_to_history(self, guess, result):
+        self.history.append((self.attempts, guess, result))
+        if len(self.history) > MAX_HISTORY:
+            self.history.pop(0)
 
     def submit_guess(self):
         if self.game_won:
@@ -60,19 +74,20 @@ class GameEngine:
         if guess < self.secret_number:
             self.feedback_msg = f"TOO LOW! (Guess was {guess})"
             self.feedback_color = (80, 160, 240)
-            # Task 2: secret is above this guess, raise the lower bound
             self.range_low = max(self.range_low, guess + 1)
+            self.add_to_history(guess, "low")
         elif guess > self.secret_number:
             self.feedback_msg = f"TOO HIGH! (Guess was {guess})"
             self.feedback_color = (240, 100, 80)
-            # Task 2: secret is below this guess, lower the upper bound
             self.range_high = min(self.range_high, guess - 1)
+            self.add_to_history(guess, "high")
         else:
             self.feedback_msg = f"CORRECT! Found in {self.attempts} attempts."
             self.feedback_color = (80, 220, 90)
             self.game_won = True
             self.range_low = guess
             self.range_high = guess
+            self.add_to_history(guess, "correct")
 
     def reset(self):
         self.secret_number = random.randint(MIN_NUMBER, MAX_NUMBER)
@@ -82,6 +97,7 @@ class GameEngine:
         self.game_won = False
         self.range_low = MIN_NUMBER
         self.range_high = MAX_NUMBER
+        self.history = []
         self.input_box.clear()
 
     def handle_event(self, event):
@@ -100,14 +116,63 @@ class GameEngine:
     def update(self):
         pass
 
+    def draw_centered(self, screen, surf, y):
+        screen.blit(surf, (self.play_width // 2 - surf.get_width() // 2, y))
+
+    # Task 3: recent guess history panel
+    def draw_history_panel(self, screen):
+        panel = pygame.Rect(self.play_width, 20, self.width - self.play_width - 20, self.height - 40)
+        pygame.draw.rect(screen, (40, 45, 56), panel, border_radius=8)
+        pygame.draw.rect(screen, (70, 76, 90), panel, width=2, border_radius=8)
+
+        title = self.font_medium.render("Recent Guesses", True, (245, 245, 245))
+        screen.blit(title, (panel.centerx - title.get_width() // 2, panel.y + 15))
+
+        if not self.history:
+            empty = self.font_small.render("No guesses yet", True, (140, 145, 155))
+            screen.blit(empty, (panel.centerx - empty.get_width() // 2, panel.y + 60))
+            return
+
+        y = panel.y + 55
+        for attempt_no, guess, result in reversed(self.history):
+            if result == "high":
+                color, label = (240, 100, 80), "TOO HIGH"
+            elif result == "low":
+                color, label = (80, 160, 240), "TOO LOW"
+            else:
+                color, label = (80, 220, 90), "CORRECT"
+
+            row = pygame.Rect(panel.x + 10, y, panel.width - 20, 34)
+            pygame.draw.rect(screen, (52, 58, 72), row, border_radius=6)
+            pygame.draw.rect(screen, color, (row.x, row.y, 5, row.height), border_radius=3)
+
+            num = self.font_small.render(f"#{attempt_no}", True, (150, 155, 165))
+            screen.blit(num, (row.x + 12, row.centery - num.get_height() // 2))
+
+            guess_surf = self.font_medium.render(str(guess), True, (245, 245, 245))
+            screen.blit(guess_surf, (row.x + 46, row.centery - guess_surf.get_height() // 2))
+
+            ax, cy = row.right - 16, row.centery
+            if result == "high":
+                pygame.draw.polygon(screen, color, [(ax - 7, cy - 4), (ax + 7, cy - 4), (ax, cy + 6)])
+            elif result == "low":
+                pygame.draw.polygon(screen, color, [(ax - 7, cy + 4), (ax + 7, cy + 4), (ax, cy - 6)])
+            else:
+                pygame.draw.circle(screen, color, (ax, cy), 6)
+
+            label_surf = self.font_small.render(label, True, color)
+            screen.blit(label_surf, (ax - 14 - label_surf.get_width(), row.centery - label_surf.get_height() // 2))
+
+            y += 40
+
     def render(self, screen):
         screen.fill((30, 34, 42))
 
         title_surf = self.font_title.render("Number Guessing Arena", True, (245, 245, 245))
-        screen.blit(title_surf, (self.width // 2 - title_surf.get_width() // 2, 35))
+        self.draw_centered(screen, title_surf, 35)
 
         attempts_surf = self.font_medium.render(f"Attempts: {self.attempts}", True, (180, 185, 195))
-        screen.blit(attempts_surf, (self.width // 2 - attempts_surf.get_width() // 2, 95))
+        self.draw_centered(screen, attempts_surf, 95)
         self.input_box.render(screen)
 
         pygame.draw.rect(screen, (50, 150, 80), self.submit_btn, border_radius=6)
@@ -119,7 +184,7 @@ class GameEngine:
         )
 
         feedback_surf = self.font_medium.render(self.feedback_msg, True, self.feedback_color)
-        screen.blit(feedback_surf, (self.width // 2 - feedback_surf.get_width() // 2, 235))
+        self.draw_centered(screen, feedback_surf, 235)
 
         # Task 2: show the current valid search range
         if self.game_won:
@@ -127,8 +192,10 @@ class GameEngine:
         else:
             range_text = f"Search range: {self.range_low} to {self.range_high}"
         range_surf = self.font_medium.render(range_text, True, (120, 220, 230))
-        screen.blit(range_surf, (self.width // 2 - range_surf.get_width() // 2, 275))
+        self.draw_centered(screen, range_surf, 275)
 
         if self.game_won:
             restart_surf = self.font_medium.render("Press [R] to Start a New Game", True, (255, 220, 80))
-            screen.blit(restart_surf, (self.width // 2 - restart_surf.get_width() // 2, 320))
+            self.draw_centered(screen, restart_surf, 320)
+
+        self.draw_history_panel(screen)
